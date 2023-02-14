@@ -144,7 +144,7 @@ def train(cfg, local_rank, distributed, logger):
         images = images.to(device)
         targets = [target.to(device) for target in targets]
 
-        loss_dict = model(images, targets)
+        loss_dict = model(images, targets, step=iteration)
 
         losses = sum(loss for loss in loss_dict.values())
 
@@ -173,7 +173,7 @@ def train(cfg, local_rank, distributed, logger):
         eta_seconds = meters.time.global_avg * (max_iter - iteration)
         eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
-        if iteration % 200 == 0 or iteration == max_iter:
+        if iteration % 50 == 0 or iteration == max_iter:
             logger.info(
                 meters.delimiter.join(
                     [

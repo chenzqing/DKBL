@@ -40,6 +40,17 @@ _C.MODEL.WEIGHT = ""
 # checkpoint of detector, for relation prediction
 _C.MODEL.PRETRAINED_DETECTOR_CKPT = ""
 
+_C.DKB = "PN"
+_C.WD = 0.52
+_C.N2T = False
+_C.SA = False
+_C.LC = "clb"
+_C.KD = False
+_C.BETA = 4.0
+_C.TSTD = 0.003
+_C.DI = 2
+
+
 # -----------------------------------------------------------------------------
 # INPUT
 # -----------------------------------------------------------------------------

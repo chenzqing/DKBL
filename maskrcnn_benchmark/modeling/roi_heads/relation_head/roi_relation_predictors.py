@@ -67,7 +67,7 @@ class TransformerPredictor(nn.Module):
             # convey statistics into FrequencyBias to avoid loading again
             self.freq_bias = FrequencyBias(config, statistics)
 
-    def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger=None):
+    def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger=None, mha=None):
         """
         Returns:
             obj_dists (list[Tensor]): logits of object label distribution
@@ -111,6 +111,10 @@ class TransformerPredictor(nn.Module):
                 visual_rep = ctx_gate * self.up_dim(union_features)
             else:
                 visual_rep = ctx_gate * union_features
+
+        ################  MHA  ####################
+        if mha is not None:
+            visual_rep = mha([visual_rep, num_rels])
 
         rel_dists = self.rel_compress(visual_rep) + self.ctx_compress(prod_rep)
                 
@@ -249,7 +253,7 @@ class MotifPredictor(nn.Module):
             # convey statistics into FrequencyBias to avoid loading again
             self.freq_bias = FrequencyBias(config, statistics)
 
-    def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger=None):
+    def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger=None, mha=None):
         """
         Returns:
             obj_dists (list[Tensor]): logits of object label distribution
@@ -294,8 +298,11 @@ class MotifPredictor(nn.Module):
             else:
                 prod_rep = prod_rep * union_features
 
-        rel_dists = self.rel_compress(prod_rep)
+        ################  MHA  ####################
+        if mha is not None:
+            prod_rep = mha([prod_rep, num_rels])
 
+        rel_dists = self.rel_compress(prod_rep)
         if self.use_bias:
             rel_dists = rel_dists + self.freq_bias.index_with_labels(pair_pred.long())
 
@@ -363,7 +370,7 @@ class VCTreePredictor(nn.Module):
 
         self.freq_bias = FrequencyBias(config, statistics)
 
-    def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger=None):
+    def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger=None, mha=None):
         """
         Returns:
             obj_dists (list[Tensor]): logits of object label distribution
@@ -406,7 +413,11 @@ class VCTreePredictor(nn.Module):
         if self.union_single_not_match:
             union_features = self.up_dim(union_features)
 
-        ctx_dists = self.ctx_compress(prod_rep * union_features)
+        ################  MHA  ####################
+        if mha is not None:
+            prod_rep = mha([prod_rep * union_features, num_rels])
+
+        ctx_dists = self.ctx_compress(prod_rep)
         #uni_dists = self.uni_compress(self.drop(union_features))
         frq_dists = self.freq_bias.index_with_labels(pair_pred.long())
 

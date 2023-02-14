@@ -10,6 +10,7 @@ from .roi_relation_predictors import make_roi_relation_predictor
 from .inference import make_roi_relation_post_processor
 from .loss import make_roi_relation_loss_evaluator
 from .sampling import make_roi_relation_samp_processor
+from .utils_att import Multi_Self_Attention
 
 class ROIRelationHead(torch.nn.Module):
     """
@@ -30,7 +31,11 @@ class ROIRelationHead(torch.nn.Module):
         else:
             self.box_feature_extractor = make_roi_box_feature_extractor(cfg, in_channels)
             feat_dim = self.box_feature_extractor.out_channels
+        self.num_head = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.NUM_HEAD
+
         self.predictor = make_roi_relation_predictor(cfg, feat_dim)
+        self.mha = Multi_Self_Attention(sa_num=1, num_attention_heads=self.num_head, input_size=feat_dim, hidden_size=feat_dim) if cfg.SA else None
+
         self.post_processor = make_roi_relation_post_processor(cfg)
         self.loss_evaluator = make_roi_relation_loss_evaluator(cfg)
         self.samp_processor = make_roi_relation_samp_processor(cfg)
@@ -38,7 +43,7 @@ class ROIRelationHead(torch.nn.Module):
         # parameters
         self.use_union_box = self.cfg.MODEL.ROI_RELATION_HEAD.PREDICT_USE_VISION
 
-    def forward(self, features, proposals, targets=None, logger=None):
+    def forward(self, features, proposals, targets=None, logger=None, step=None):
         """
         Arguments:
             features (list[Tensor]): feature-maps from possibly several levels
@@ -77,19 +82,18 @@ class ROIRelationHead(torch.nn.Module):
         
         # final classifier that converts the features into predictions
         # should corresponding to all the functions and layers after the self.context class
-        refine_logits, relation_logits, add_losses = self.predictor(proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger)
+        refine_logits, relation_logits, add_losses = self.predictor(proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger, self.mha)
 
-        # for test
         if not self.training:
             result = self.post_processor((relation_logits, refine_logits), rel_pair_idxs, proposals)
             return roi_features, result, {}
 
-        loss_relation, loss_refine = self.loss_evaluator(proposals, rel_labels, relation_logits, refine_logits)
+        loss_relation, loss_refine = self.loss_evaluator(proposals, rel_labels, relation_logits, refine_logits, step=step)
 
         if self.cfg.MODEL.ATTRIBUTE_ON and isinstance(loss_refine, (list, tuple)):
             output_losses = dict(loss_rel=loss_relation, loss_refine_obj=loss_refine[0], loss_refine_att=loss_refine[1])
         else:
-            output_losses = dict(loss_rel=loss_relation, loss_refine_obj=loss_refine)
+            output_losses = dict(loss_relation=loss_relation[0], dkb_loss=loss_relation[1], loss_refine_obj=loss_refine)
 
         output_losses.update(add_losses)
 
